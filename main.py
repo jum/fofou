@@ -400,7 +400,7 @@ class ManageForums(FofouBase):
       forum.tagline = tagline
       forum.sidebar = sidebar
       forum.analytics_code = analytics_code
-      forum()
+      forum.put()
       msg = "Forum '%s' has been updated." % title_or_url
     else:
       # create a new forum
@@ -537,7 +537,6 @@ class PostDelUndel(webapp.RequestHandler):
       else:
         topic.is_deleted = False
       topic.put()
-      clear_forums_memcache()
       clear_topics_memcache(forum)
 
     # redirect to topic owning this post
