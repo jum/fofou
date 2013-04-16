@@ -10,6 +10,7 @@ from django.utils import feedgenerator
 from django.template import Context, Template
 import logging
 from offsets import *
+from recaptcha.client import captcha
 
 # Structure of urls:
 #
@@ -105,6 +106,8 @@ class Forum(db.Model):
   analytics_code = db.StringProperty()
   # Note: import_secret is obsolete
   import_secret = db.StringProperty()
+  recaptcha_public = db.StringProperty()
+  recaptcha_private = db.StringProperty()
 
 # A forum is collection of topics
 class Topic(db.Model):
@@ -366,8 +369,8 @@ class ManageForums(FofouBase):
         # invalid key - should not happen so go to top-level
         return self.redirect("/")
 
-    vals = ['url','title', 'tagline', 'sidebar', 'disable', 'enable', 'analyticscode']
-    (url, title, tagline, sidebar, disable, enable, analytics_code) = req_get_vals(self.request, vals)
+    vals = ['url','title', 'tagline', 'sidebar', 'disable', 'enable', 'analyticscode', 'recaptchapublic', 'recaptchaprivate']
+    (url, title, tagline, sidebar, disable, enable, analytics_code, recaptcha_public, recaptcha_private) = req_get_vals(self.request, vals)
 
     errmsg = None
     if not valid_forum_url(url):
@@ -386,6 +389,8 @@ class ManageForums(FofouBase):
         'prevtagline' : tagline,
         'prevsidebar' : sidebar,
         'prevanalyticscode' : analytics_code,
+        'prevrecaptchapublic' : recaptcha_public,
+        'prevrecaptchaprivate' : recaptcha_private,
         'forum_key' : forum_key,
         'errmsg' : errmsg
       }
@@ -400,6 +405,8 @@ class ManageForums(FofouBase):
       forum.tagline = tagline
       forum.sidebar = sidebar
       forum.analytics_code = analytics_code
+      forum.recaptcha_public = recaptcha_public
+      forum.recaptcha_private = recaptcha_private
       forum.put()
       msg = "Forum '%s' has been updated." % title_or_url
     else:
@@ -466,6 +473,8 @@ class ManageForums(FofouBase):
         tvals['prevtagline'] = f.tagline
         tvals['prevsidebar'] = f.sidebar
         tvals['prevanalyticscode'] = f.analytics_code
+        tvals['prevrecaptchapublic'] = f.recaptcha_public
+        tvals['prevrecaptchaprivate'] = f.recaptcha_private
         tvals['forum_key'] = str(f.key())
       forums.append(f)
     tvals['msg'] = self.request.get('msg')
@@ -728,7 +737,6 @@ class EmailForm(FofouBase):
     (forum, siteroot, tmpldir) = forum_siteroot_tmpldir_from_url(self.request.path_info)
     if not forum or forum.is_disabled:
       return self.redirect("/")
-    (num1, num2) = (random.randint(1,9), random.randint(1,9))
     post_id = self.request.get("post_id")
     if not post_id: return self.redirect(siteroot)
     post = db.get(db.Key.from_path('Post', int(post_id)))
@@ -739,9 +747,6 @@ class EmailForm(FofouBase):
     tvals = {
       'siteroot' : siteroot,
       'forum' : forum,
-      'num1' : num1,
-      'num2' : num2,
-      'num3' : int(num1) + int(num2),
       'post_id' : post_id,
       'to' : to_name,
       'subject' : subject,
@@ -778,8 +783,8 @@ class PostForm(FofouBase):
     if not forum or forum.is_disabled:
       return self.redirect("/")
 
-    if not users.get_current_user():
-      return self.redirect(users.create_login_url(self.request.url))
+    #if not users.get_current_user():
+    #  return self.redirect(users.create_login_url(self.request.url))
 
     ip = get_remote_ip()
     if ip in BANNED_IPS:
@@ -799,14 +804,12 @@ class PostForm(FofouBase):
         prevUrl = "http://"
       prevName = user.name
       prevEmail = user.email
-    (num1, num2) = (random.randint(1,9), random.randint(1,9))
     forum.title_or_url = forum.title or forum.url
+    chtml = captcha.displayhtml(public_key = forum.recaptcha_public, use_ssl = False, error = None)
     tvals = {
       'siteroot' : siteroot,
       'forum' : forum,
-      'num1' : num1,
-      'num2' : num2,
-      'num3' : int(num1) + int(num2),
+      'captchahtml' : chtml,
       'rememberChecked' : rememberChecked,
       'prevUrl' : prevUrl,
       'prevEmail' : prevEmail,
@@ -829,8 +832,8 @@ class PostForm(FofouBase):
     if self.request.get('Cancel'): 
       return self.redirect(siteroot)
 
-    if not users.get_current_user():
-      return self.redirect(self.request.url)
+    #if not users.get_current_user():
+    #  return self.redirect(self.request.url)
 
     ip = get_remote_ip()
     if ip in BANNED_IPS:
@@ -838,8 +841,8 @@ class PostForm(FofouBase):
 
     self.send_cookie()
 
-    vals = ['TopicId', 'num1', 'num2', 'Captcha', 'Subject', 'Message', 'Remember', 'Email', 'Name', 'Url']
-    (topic_id, num1, num2, captcha, subject, message, remember_me, email, name, homepage) = req_get_vals(self.request, vals)
+    vals = ['TopicId', 'recaptcha_challenge_field', 'recaptcha_response_field', 'Subject', 'Message', 'Remember', 'Email', 'Name', 'Url']
+    (topic_id, challenge, response, subject, message, remember_me, email, name, homepage) = req_get_vals(self.request, vals)
     message = to_unicode(message)
 
     remember_me = True
@@ -847,22 +850,15 @@ class PostForm(FofouBase):
     rememberChecked = ""
     if remember_me: rememberChecked = "checked"
 
-    validCaptcha = True
-    try:
-      captcha = int(captcha)
-      num1 = int(num1)
-      num2 = int(num2)
-    except ValueError:
-      validCaptcha = False
+    cResponse = captcha.submit(challenge, response, forum.recaptcha_private, ip)
+    validCaptcha = cResponse.is_valid
 
     homepage = sanitize_homepage(homepage)
+    chtml = captcha.displayhtml(public_key = forum.recaptcha_public, use_ssl = False, error = None)
     tvals = {
       'siteroot' : siteroot,
       'forum' : forum,
-      'num1' : num1,
-      'num2' : num2,
-      'num3' : int(num1) + int(num2),
-      "prevCaptcha" : captcha,
+      'captchahtml' : chtml,
       "prevSubject" : subject,
       "prevMessage" : message,
       "rememberChecked" : rememberChecked,
@@ -875,7 +871,7 @@ class PostForm(FofouBase):
     
     # validate captcha and other values
     errclass = None
-    if not validCaptcha or (captcha != (num1 + num2)): errclass = 'captcha_class'
+    if not validCaptcha : errclass = 'captcha_class'
     if not message: errclass = "message_class"
     if not name: errclass = "name_class"
     if not valid_email(email): errclass = "email_class"

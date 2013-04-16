@@ -26,8 +26,6 @@
 	<td class="contents">
 	<div class="form">
 		<form action="post" method="post">
-		<input name="num1" value="{{ num1 }}" type="hidden">
-		<input name="num2" value="{{ num2 }}" type="hidden">
 
 		{% if prevTopicId %} 
 			<input name="TopicId" value="{{ prevTopicId }}" type="hidden">
@@ -39,11 +37,10 @@
 		<table class="form" cellspacing="0">
 			<tbody>
 			<tr>
-			<th><label for="Captcha">{{ num1 }} + {{ num2 }} is? (hint: {{ num3 }})</label></th>
+			<th>Are you human?</th>
 			<td colspan="2">
-				<input class="{{ captcha_class }}" size="60" maxlength="64" name="Captcha" id="Captcha" style="width: 39em;" value="{{ prevCaptcha }}" type="edit">
-					<div>Are you human? (sorry we have to ask). Tell us how much
-					is {{ num1 }} + {{ num2 }} by entering <b>{{ num3 }}</b> above.</div>
+					{{ captchahtml }}
+					<div>Are you human? (sorry we have to ask).</div>
 					&nbsp;
 			</td>
 			</tr>
