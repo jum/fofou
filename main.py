@@ -783,8 +783,8 @@ class PostForm(FofouBase):
     if not forum or forum.is_disabled:
       return self.redirect("/")
 
-    #if not users.get_current_user():
-    #  return self.redirect(users.create_login_url(self.request.url))
+    if not users.get_current_user():
+      return self.redirect(users.create_login_url(self.request.url))
 
     ip = get_remote_ip()
     if ip in BANNED_IPS:
@@ -832,8 +832,8 @@ class PostForm(FofouBase):
     if self.request.get('Cancel'): 
       return self.redirect(siteroot)
 
-    #if not users.get_current_user():
-    #  return self.redirect(self.request.url)
+    if not users.get_current_user():
+      return self.redirect(self.request.url)
 
     ip = get_remote_ip()
     if ip in BANNED_IPS:
