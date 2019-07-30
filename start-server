@@ -1,0 +1,9 @@
+#!/bin/sh
+DATADIR=$HOME/dev_appserver/`grep application: app.yaml | cut -d ' ' -f 2`
+mkdir -p $DATADIR/blobs
+dev_appserver.py --port 8089 --admin_port 8002 \
+	--datastore_path=$DATADIR/dev_appserver.datastore \
+	--search_indexes_path=$DATADIR/dev_appserver.searchindexes \
+	--logs_path=$DATADIR/dev_appserver.logs \
+	--blobstore_path=$DATADIR/blobs \
+	.
